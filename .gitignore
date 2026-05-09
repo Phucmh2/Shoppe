@@ -40,6 +40,10 @@ spike*_output.json
 spikes/**/output/
 spikes/**/cookies.txt
 
+# Playwright browsers cache
+.playwright/
+playwright/.cache/
+
 # Secrets & local config
 appsettings.Development.json
 appsettings.Local.json
