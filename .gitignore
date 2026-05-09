@@ -38,6 +38,7 @@ packages/
 # Spike outputs (raw API dumps, not for repo)
 spike*_output.json
 spikes/**/output/
+spikes/**/cookies.txt
 
 # Secrets & local config
 appsettings.Development.json

@@ -1,0 +1,28 @@
+Paste your full cookie string from shopee.vn here, then save this file as cookies.txt
+(cookies.txt is gitignored).
+
+How to get the cookie string (Chrome / Edge):
+
+  1. Open https://shopee.vn in a normal browser tab.
+  2. Make sure the page loads completely. Do a small action like scrolling
+     and clicking on a category - this triggers the anti-bot to issue
+     a full cookie set including SPC_F (device fingerprint).
+  3. Press F12 to open DevTools.
+  4. Go to the Console tab.
+  5. Paste this and press Enter:
+
+         copy(document.cookie)
+
+     The cookie string is now on your clipboard.
+  6. Paste it into a new file named cookies.txt in this folder
+     (next to Program.cs).
+
+The string looks like (one line, semicolons separate cookies):
+
+  SPC_F=abc123...; REC_T_ID=xxx; csrftoken=xxx; SPC_EC=xxx; SPC_U=xxx; ...
+
+Important:
+  - Do NOT commit cookies.txt - .gitignore already excludes it.
+  - Cookies expire after a few days; if you start getting 403 again, refresh.
+  - Use a "clean" browser profile or guest window so your real account
+    cookies are not mixed in. The crawler should be anonymous.

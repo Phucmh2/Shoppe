@@ -18,10 +18,32 @@ const int PageSize = 60;
 const int TotalProducts = 100;
 const int DelayMs = 2500;
 
+// Read cookies from ./cookies.txt (gitignored).
+// To populate: open shopee.vn in Chrome, F12, Application > Cookies > shopee.vn,
+// or run document.cookie in console and paste the full string into cookies.txt.
+var cookieString = LoadCookieString();
+var hasCookies = !string.IsNullOrWhiteSpace(cookieString);
+
+var cookieContainer = new CookieContainer();
+if (hasCookies)
+{
+    foreach (var raw in cookieString!.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        var idx = raw.IndexOf('=');
+        if (idx <= 0) continue;
+        var name = raw[..idx].Trim();
+        var value = raw[(idx + 1)..].Trim();
+        try { cookieContainer.Add(new Uri(BaseUrl), new Cookie(name, value)); }
+        catch { /* skip invalid */ }
+    }
+}
+
 var handler = new HttpClientHandler
 {
     AutomaticDecompression =
-        DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
+        DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+    CookieContainer = cookieContainer,
+    UseCookies = true
 };
 
 using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
@@ -29,11 +51,41 @@ http.DefaultRequestHeaders.Add("User-Agent", UserAgent);
 http.DefaultRequestHeaders.Add("Accept", "application/json");
 http.DefaultRequestHeaders.Add("Accept-Language", "vi-VN,vi;q=0.9,en;q=0.8");
 http.DefaultRequestHeaders.Add("Referer", $"{BaseUrl}/");
+http.DefaultRequestHeaders.Add("Origin", BaseUrl);
 http.DefaultRequestHeaders.Add("X-API-SOURCE", "pc");
 http.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
 http.DefaultRequestHeaders.Add("X-Shopee-Language", "vi");
+http.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "empty");
+http.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "cors");
+http.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-origin");
+
+// Add CSRF token from cookie if present.
+var csrf = cookieContainer.GetCookies(new Uri(BaseUrl))["csrftoken"]?.Value;
+if (!string.IsNullOrEmpty(csrf))
+{
+    http.DefaultRequestHeaders.Add("X-CSRFToken", csrf);
+}
 
 PrintHeader();
+
+// Optional warm-up: GET homepage first so server may set additional cookies.
+if (!hasCookies)
+{
+    Console.WriteLine("[warm-up] No cookies file found. Doing a GET / to receive cookies...");
+    try
+    {
+        using var warm = await http.GetAsync(BaseUrl + "/");
+        Console.WriteLine($"  Warm-up status: {(int)warm.StatusCode}");
+        var newCookies = cookieContainer.GetCookies(new Uri(BaseUrl));
+        Console.WriteLine($"  Cookies received: {newCookies.Count}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"  Warm-up failed: {ex.Message}");
+    }
+    Console.WriteLine();
+    await Task.Delay(1500);
+}
 
 var allItems = new List<JsonElement>();
 var totalFetched = 0;
@@ -128,6 +180,7 @@ void PrintHeader()
     Console.WriteLine($"Target items   : {TotalProducts}");
     Console.WriteLine($"Page size      : {PageSize}");
     Console.WriteLine($"Delay between  : {DelayMs}ms");
+    Console.WriteLine($"Cookies loaded : {(hasCookies ? cookieContainer.GetCookies(new Uri(BaseUrl)).Count + " cookies" : "NONE - see cookies.txt.example")}");
     Console.WriteLine();
 }
 
@@ -142,7 +195,7 @@ void PrintSummary()
 
     if (blocked)
     {
-        Console.WriteLine("RESULT: BLOCKED. Need proxy or slower rate.");
+        Console.WriteLine("RESULT: BLOCKED. Try again with cookies.txt populated, or move to Playwright.");
     }
     else if (totalFetched == 0)
     {
@@ -150,7 +203,7 @@ void PrintSummary()
     }
     else if (errorCount == 0)
     {
-        Console.WriteLine("RESULT: OK. API accessible without proxy at this rate.");
+        Console.WriteLine("RESULT: OK. API accessible at this rate.");
     }
     else
     {
@@ -205,6 +258,15 @@ void SaveOutput()
     File.WriteAllText(outPath, JsonSerializer.Serialize(payload, opts));
     Console.WriteLine();
     Console.WriteLine($"Sample saved to: {outPath}");
+}
+
+static string? LoadCookieString()
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "cookies.txt");
+    path = Path.GetFullPath(path);
+    if (!File.Exists(path)) return null;
+    var content = File.ReadAllText(path).Trim();
+    return string.IsNullOrWhiteSpace(content) ? null : content;
 }
 
 static string Truncate(string s, int max) =>
