@@ -37,7 +37,10 @@ packages/
 
 # Spike outputs (raw API dumps, not for repo)
 spike*_output.json
+spike*_raw_*.json
+spike*_api_sniff.json
 spikes/**/output/
+spikes/**/spike*_responses/
 spikes/**/cookies.txt
 
 # Playwright browsers cache
