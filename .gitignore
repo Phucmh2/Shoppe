@@ -39,6 +39,9 @@ packages/
 spike*_output.json
 spike*_raw_*.json
 spike*_api_sniff.json
+spike*_page.html
+spike*_screenshot.png
+spike*_first_card.html
 spikes/**/output/
 spikes/**/spike*_responses/
 spikes/**/cookies.txt
