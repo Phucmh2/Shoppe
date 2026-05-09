@@ -1,0 +1,56 @@
+# .NET build outputs
+bin/
+obj/
+out/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+*.vsidx
+*.lock.json
+
+# Rider
+.idea/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild[Ll]og.*
+*.binlog
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Spike outputs (raw API dumps, not for repo)
+spike*_output.json
+spikes/**/output/
+
+# Secrets & local config
+appsettings.Development.json
+appsettings.Local.json
+*.env
+.env
+secrets.json
+**/Properties/launchSettings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
