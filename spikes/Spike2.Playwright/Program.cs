@@ -58,6 +58,30 @@ await context.AddInitScriptAsync(@"
 
 var page = await context.NewPageAsync();
 
+// Network sniffer: capture all interesting API calls during warm-up
+// to discover the real endpoint Shopee currently uses.
+var apiCalls = new List<(string Url, int Status, int BodyLen, string? Snippet)>();
+page.Response += async (_, response) =>
+{
+    var url = response.Url;
+    var isInteresting =
+        url.Contains("/api/", StringComparison.OrdinalIgnoreCase) &&
+        (url.Contains("search", StringComparison.OrdinalIgnoreCase) ||
+         url.Contains("recommend", StringComparison.OrdinalIgnoreCase) ||
+         url.Contains("item", StringComparison.OrdinalIgnoreCase) ||
+         url.Contains("category", StringComparison.OrdinalIgnoreCase) ||
+         url.Contains("page", StringComparison.OrdinalIgnoreCase));
+    if (!isInteresting) return;
+
+    try
+    {
+        var body = await response.TextAsync();
+        var snippet = body.Length > 200 ? body[..200] : body;
+        apiCalls.Add((url, response.Status, body.Length, snippet));
+    }
+    catch { /* response body may be unavailable */ }
+};
+
 PrintHeader();
 
 Console.WriteLine("[warm-up] Navigating to shopee.vn home...");
@@ -75,8 +99,27 @@ catch (Exception ex)
     Console.WriteLine($"  Warm-up exception: {ex.Message}");
 }
 
-// Let JS challenges complete.
+// Let JS challenges complete and home-page API calls fire.
 await Task.Delay(5000);
+
+// Now navigate to a category browse page so the REAL search/listing
+// endpoint fires - this is how we discover which API to call.
+Console.WriteLine("[discover] Navigating to category page to capture real API endpoint...");
+try
+{
+    var catUrl = $"{BaseUrl}/cat.{CategoryId}";
+    var catNav = await page.GotoAsync(catUrl, new PageGotoOptions
+    {
+        WaitUntil = WaitUntilState.NetworkIdle,
+        Timeout = 60_000
+    });
+    Console.WriteLine($"  Category nav status: {catNav?.Status}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"  Category nav exception: {ex.Message}");
+}
+await Task.Delay(4000);
 
 var cookiesAfter = await context.CookiesAsync(new[] { BaseUrl });
 Console.WriteLine($"  Cookies after warm-up: {cookiesAfter.Count}");
@@ -85,6 +128,22 @@ if (cookiesAfter.Count > 0)
     var names = string.Join(", ", cookiesAfter.Take(8).Select(c => c.Name));
     Console.WriteLine($"  Cookie names (first 8): {names}");
 }
+Console.WriteLine();
+
+Console.WriteLine($"[discover] Captured {apiCalls.Count} interesting API calls:");
+foreach (var call in apiCalls.Take(30))
+{
+    var shortUrl = call.Url.Length > 140 ? call.Url[..140] + "..." : call.Url;
+    Console.WriteLine($"  [{call.Status}] {call.BodyLen,7}B  {shortUrl}");
+}
+
+// Save full sniffed list (URL + body snippet) for analysis
+var sniffOutDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..");
+var sniffPath = Path.GetFullPath(Path.Combine(sniffOutDir, "spike2_api_sniff.json"));
+File.WriteAllText(sniffPath, JsonSerializer.Serialize(
+    apiCalls.Select(c => new { c.Url, c.Status, c.BodyLen, c.Snippet }),
+    new JsonSerializerOptions { WriteIndented = true }));
+Console.WriteLine($"  Full sniff log saved to: {sniffPath}");
 Console.WriteLine();
 
 var allItems = new List<JsonElement>();
@@ -146,6 +205,13 @@ for (var offset = 0; offset < TotalProducts && totalFetched < TotalProducts; off
         {
             Console.WriteLine("  No 'items' array.");
             Console.WriteLine($"  Top-level keys: {string.Join(", ", root.EnumerateObject().Select(p => p.Name))}");
+
+            // Dump full raw response so we can see what Shopee actually returned.
+            var dumpDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..");
+            var dumpPath = Path.GetFullPath(Path.Combine(dumpDir, $"spike2_raw_offset{offset}.json"));
+            File.WriteAllText(dumpPath, bodyText);
+            Console.WriteLine($"  Raw body saved to: {dumpPath} ({bodyText.Length} bytes)");
+            Console.WriteLine($"  First 600 chars: {Truncate(bodyText, 600)}");
             continue;
         }
 
